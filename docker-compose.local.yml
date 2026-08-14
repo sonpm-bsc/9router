@@ -5,3 +5,5 @@ services:
     image: 9router:search-cache-20260814
     environment:
       SEARXNG_URL: http://host.docker.internal:8888/search
+    volumes:
+      - ./scripts:/app/local-scripts:ro
