@@ -10,6 +10,7 @@
 import { buildSearchRequest } from "./callers.js";
 import { normalizeSearchResponse } from "./normalizers.js";
 import { handleChatSearch } from "./chatSearch.js";
+import { buildSearchCacheKey, getSearchCache, setSearchCache } from "./responseCache.js";
 
 const GLOBAL_TIMEOUT_MS = 15000;
 const NON_RETRIABLE = new Set([400, 401, 403, 404]);
@@ -64,6 +65,8 @@ function successResult(data) {
 async function tryDedicatedProvider({ provider, providerConfig, body, credentials, log, globalStartTime }) {
   const startTime = Date.now();
   const token = credentials?.apiKey || credentials?.accessToken || undefined;
+  const cacheTtlMs = Number(providerConfig.cacheTTLMs);
+  const cacheEnabled = providerConfig.responseCache === true && Number.isFinite(cacheTtlMs) && cacheTtlMs > 0;
 
   if (providerConfig.authType !== "none" && !token) {
     return { success: false, status: 401, error: `No credentials for provider: ${provider.id}` };
@@ -83,6 +86,25 @@ async function tryDedicatedProvider({ provider, providerConfig, body, credential
     providerOptions: body.provider_options,
     providerSpecificData: credentials?.providerSpecificData
   };
+
+  const cacheKey = cacheEnabled
+    ? buildSearchCacheKey({ providerId: provider.id, baseUrl: providerConfig.baseUrl, params })
+    : null;
+  const cached = cacheKey ? getSearchCache(cacheKey) : null;
+  if (cached) {
+    return {
+      success: true,
+      data: {
+        ...cached,
+        metrics: {
+          ...cached.metrics,
+          response_time_ms: Date.now() - startTime,
+          upstream_latency_ms: 0,
+          cache_hit: true
+        }
+      }
+    };
+  }
 
   let url, init;
   try {
@@ -112,7 +134,7 @@ async function tryDedicatedProvider({ provider, providerConfig, body, credential
     const results = normalized.results.slice(0, params.maxResults);
     const duration = Date.now() - startTime;
 
-    return {
+    const result = {
       success: true,
       data: {
         provider: provider.id,
@@ -120,10 +142,19 @@ async function tryDedicatedProvider({ provider, providerConfig, body, credential
         results,
         answer: null,
         usage: { queries_used: 1, search_cost_usd: providerConfig.costPerQuery || 0 },
-        metrics: { response_time_ms: duration, upstream_latency_ms: duration, total_results_available: normalized.totalResults },
+        metrics: {
+          response_time_ms: duration,
+          upstream_latency_ms: duration,
+          total_results_available: normalized.totalResults,
+          ...(cacheEnabled ? { cache_hit: false } : {})
+        },
         errors: []
       }
     };
+
+    // Do not poison the cache with empty or otherwise unsuccessful responses.
+    if (cacheKey && results.length > 0) setSearchCache(cacheKey, result.data, cacheTtlMs);
+    return result;
   } catch (err) {
     clearTimeout(timer);
     const isTimeout = err.name === "AbortError";

@@ -1,0 +1,7 @@
+# Local Mac runtime override.
+# Keeps the verified local image and routes web search to the host SearXNG.
+services:
+  9router:
+    image: 9router:search-cache-20260814
+    environment:
+      SEARXNG_URL: http://host.docker.internal:8888/search
