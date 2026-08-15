@@ -30,6 +30,7 @@ export default {
     defaultMaxResults: 5,
     maxMaxResults: 50,
     timeoutMs: 10000,
+    responseCache: true,
     cacheTTLMs: 180000
   }
 };

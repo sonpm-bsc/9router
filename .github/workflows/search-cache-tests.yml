@@ -1,0 +1,45 @@
+name: Search and cache tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "open-sse/handlers/search/**"
+      - "open-sse/providers/registry/searxng.js"
+      - "scripts/ensure-local-search-combo.mjs"
+      - "tests/**"
+      - "docker-compose*.yml"
+      - ".github/workflows/search-cache-tests.yml"
+  pull_request:
+    paths:
+      - "open-sse/handlers/search/**"
+      - "open-sse/providers/registry/searxng.js"
+      - "scripts/ensure-local-search-combo.mjs"
+      - "tests/**"
+      - "docker-compose*.yml"
+      - ".github/workflows/search-cache-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  focused-search:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install focused test runner
+        run: npm install --prefix tests --no-save --no-package-lock vitest@4.0.17
+
+      - name: Run response-cache tests
+        run: npm test --prefix tests -- --config ./vitest.config.js unit/search-response-cache.test.js
+
+      - name: Validate local Compose override
+        run: docker compose -f docker-compose.local.yml config --quiet
