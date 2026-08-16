@@ -62,6 +62,20 @@ describe("toOpenAIUsage", () => {
     expect(u.total_tokens).toBe(99);
   });
 
+  it("commandcode: surfaces cache reads from all supported usage shapes", () => {
+    const cacheShapes = [
+      { cachedInputTokens: 90 },
+      { inputTokenDetails: { cacheReadTokens: 90 } },
+      { raw: { prompt_cache_hit_tokens: 90 } },
+      { providerMetadata: { deepseek: { promptCacheHitTokens: 90 } } },
+    ];
+
+    for (const shape of cacheShapes) {
+      const u = toOpenAIUsage({ inputTokens: 100, outputTokens: 10, ...shape }, "commandcode");
+      expect(u.prompt_tokens_details.cached_tokens).toBe(90);
+    }
+  });
+
   it("unknown kind / null raw -> null", () => {
     expect(toOpenAIUsage({}, "nope")).toBeNull();
     expect(toOpenAIUsage(null, "claude")).toBeNull();
