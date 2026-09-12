@@ -1,8 +1,14 @@
 # Local Mac runtime override.
-# Uses latest 9router base plus the deployed DeepSeek cache-telemetry patch.
+# Uses the deployed v0.5.75 cache-telemetry overlay. This image is local-only;
+# rebuild it from the documented upstream base before using on another host.
 services:
   9router:
-    image: 9router:cachefix-deepseek-20260912
+    image: 9router:cachefix-claude-usage-20260912-v075-r3
+    labels:
+      org.opencontainers.image.title: "9router cache telemetry overlay"
+      org.opencontainers.image.version: "0.5.75"
+      org.opencontainers.image.base.name: "upstream:v0.5.75"
+      com.9router.source.ref: "main"
     ports:
       - "3000:20128"
     environment:
