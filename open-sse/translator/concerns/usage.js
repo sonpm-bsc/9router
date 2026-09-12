@@ -59,6 +59,8 @@ const USAGE_EXTRACTORS = {
     const total = typeof raw.totalTokens === "number" ? raw.totalTokens : input + output;
     const cached =
       n(raw.cachedInputTokens) ||
+      n(raw.cachedTokens) ||
+      n(raw.cache_read_input_tokens) ||
       n(raw.inputTokenDetails?.cacheReadTokens) ||
       n(raw.raw?.prompt_cache_hit_tokens) ||
       n(raw.providerMetadata?.deepseek?.promptCacheHitTokens);
