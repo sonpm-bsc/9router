@@ -10,13 +10,15 @@ Local/remote AI gateway exposing OpenAI-compatible REST. One key, many providers
 ## Setup
 
 ```bash
-export NINEROUTER_URL="http://localhost:20128"      # or VPS / tunnel URL
+export NINEROUTER_URL="http://127.0.0.1:3000"       # local compose maps host :3000 -> container :20128
 export NINEROUTER_KEY="sk-..."                      # from Dashboard → Keys (only if requireApiKey=true)
 ```
 
 All requests: `${NINEROUTER_URL}/v1/...` with header `Authorization: Bearer ${NINEROUTER_KEY}` (omit if auth disabled).
 
 Verify: `curl $NINEROUTER_URL/api/health` → `{"ok":true}`
+
+For a direct container binding without the local compose override, use `http://127.0.0.1:20128` instead. Cache statistics are usage telemetry, not a billing guarantee; inspect the live usage endpoint/dashboard for the selected period and route.
 
 ## Discover models
 

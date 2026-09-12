@@ -1,8 +1,8 @@
 # Local Mac runtime override.
-# Keeps the verified local image and routes web search to the host SearXNG.
+# Uses latest 9router base plus the deployed DeepSeek cache-telemetry patch.
 services:
   9router:
-    image: 9router:search-cache-20260815-v055
+    image: 9router:cachefix-deepseek-20260912
     ports:
       - "3000:20128"
     environment:

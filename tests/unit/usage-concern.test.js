@@ -65,6 +65,8 @@ describe("toOpenAIUsage", () => {
   it("commandcode: surfaces cache reads from all supported usage shapes", () => {
     const cacheShapes = [
       { cachedInputTokens: 90 },
+      { cachedTokens: 90 },
+      { cache_read_input_tokens: 90 },
       { inputTokenDetails: { cacheReadTokens: 90 } },
       { raw: { prompt_cache_hit_tokens: 90 } },
       { providerMetadata: { deepseek: { promptCacheHitTokens: 90 } } },
