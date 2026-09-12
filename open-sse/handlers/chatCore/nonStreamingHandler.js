@@ -46,6 +46,24 @@ function openAICompletionToClaudeMessage(responseBody) {
   if (content.length === 0) content.push({ type: "text", text: "" });
 
   const usage = responseBody.usage || {};
+  const cachedTokens = usage.prompt_tokens_details?.cached_tokens;
+  const cacheCreationTokens = usage.prompt_tokens_details?.cache_creation_tokens;
+  const cacheReadTokens = typeof cachedTokens === "number" ? cachedTokens : 0;
+  const cacheCreateTokens = typeof cacheCreationTokens === "number" ? cacheCreationTokens : 0;
+  const hasPromptTokens = typeof usage.prompt_tokens === "number";
+  const rawInputTokens = hasPromptTokens ? usage.prompt_tokens : (usage.input_tokens || 0);
+  // Chat Completions prompt_tokens is cache-inclusive. A bare input_tokens
+  // fallback may already be cache-exclusive, so do not subtract twice.
+  const inputTokens = hasPromptTokens
+    ? Math.max(0, rawInputTokens - cacheReadTokens - cacheCreateTokens)
+    : rawInputTokens;
+  const claudeUsage = {
+    input_tokens: inputTokens,
+    output_tokens: usage.completion_tokens || usage.output_tokens || 0,
+  };
+  if (cacheReadTokens > 0) claudeUsage.cache_read_input_tokens = cacheReadTokens;
+  if (cacheCreateTokens > 0) claudeUsage.cache_creation_input_tokens = cacheCreateTokens;
+
   return {
     id: String(responseBody.id || `msg_${Date.now()}`).replace(/^chatcmpl-/, ""),
     type: "message",
@@ -54,10 +72,7 @@ function openAICompletionToClaudeMessage(responseBody) {
     content,
     stop_reason: fromOpenAIFinish(choice.finish_reason, FORMATS.CLAUDE),
     stop_sequence: null,
-    usage: {
-      input_tokens: usage.prompt_tokens || usage.input_tokens || 0,
-      output_tokens: usage.completion_tokens || usage.output_tokens || 0,
-    },
+    usage: claudeUsage,
   };
 }
 
