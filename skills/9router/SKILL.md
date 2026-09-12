@@ -20,6 +20,35 @@ Verify: `curl $NINEROUTER_URL/api/health` → `{"ok":true}`
 
 For a direct container binding without the local compose override, use `http://127.0.0.1:20128` instead. Cache statistics are usage telemetry, not a billing guarantee; inspect the live usage endpoint/dashboard for the selected period and route.
 
+## Operational verification
+
+Use the published host port `3000` for Claude/DSF/DSP aliases; use `20128` when testing the direct container binding. Check both health endpoints after a restart or image change:
+
+```bash
+curl -fsS http://127.0.0.1:3000/api/health
+curl -fsS http://127.0.0.1:20128/api/health
+```
+
+For cache telemetry, query the selected period rather than relying on a single request:
+
+```bash
+curl -fsS "$NINEROUTER_URL/api/usage/stats?period=24h"
+```
+
+The response exposes `totalCacheHitRatio`, `totalCacheCreationTokens`, and corresponding provider/model/account/API-key/endpoint fields. A zero value can mean a cold or changed session, missing upstream usage fields, or no cache-bearing requests; it is not by itself proof that upstream caching is disabled.
+
+Run the repeat-request canary from the repository when a live cache check is needed:
+
+```bash
+ROUTER_API_KEY="$NINEROUTER_KEY" npm run cache:canary
+```
+
+The canary sends identical non-stream requests and passes only when a request after warmup reports read-cache tokens. Override `ROUTER_BASE_URL`, `ROUTER_MODEL`, `CACHE_CANARY_ATTEMPTS`, or `CACHE_CANARY_MIN_TOKENS` when testing another route. It never prints the API key or response content.
+
+Cache hit rate is meaningful only when session/model/provider and the prompt prefix are stable. Compare repeated requests over the same period and route; do not treat the first warmup request, a provider header of `null`, or estimated cost as billing/provider-resolution proof.
+
+For the current local image lineage and rollback rule, read [`9ROUTER_RUNTIME_PROVENANCE.md`](../../9ROUTER_RUNTIME_PROVENANCE.md) before rebuilding. Preserve the data volume and the upstream base tag; rebuilding from an older repository Dockerfile can silently downgrade the live runtime.
+
 ## Discover models
 
 ```bash
@@ -61,3 +90,6 @@ When the user needs a specific capability, fetch that skill's `SKILL.md` from it
 - 401 → set/refresh `NINEROUTER_KEY` (Dashboard → Keys)
 - 400 `Invalid model format` → check `model` exists in `/v1/models/<kind>`
 - 503 `All accounts unavailable` → wait `retry-after` or add another provider account
+- 403/404 from `activeOAuth` → treat as provider/account entitlement or upstream availability first; verify the affected account/model directly. Re-auth only the affected account when authorized. Restarting 9Router or clearing a temporary lock is not a root-cause fix.
+- 400 with `tool_use` IDs missing immediate `tool_result` blocks → repair the conversation/tool-result pairing before retrying; this is a protocol-history issue, not a cache issue.
+- `Connection refused` → check both `/api/health` endpoints, the published port mapping, and local firewall/proxy state before changing provider accounts.
