@@ -3,9 +3,9 @@
 # rebuild it from the documented upstream base before using on another host.
 services:
   9router:
-    image: 9router:cachefix-claude-usage-20260913-v075-r4
+    image: 9router:cachefix-openrouter-session-20260913-v075-r5
     labels:
-      org.opencontainers.image.title: "9router cache telemetry overlay"
+      org.opencontainers.image.title: "9router cache telemetry + OpenRouter session overlay"
       org.opencontainers.image.version: "0.5.75"
       org.opencontainers.image.base.name: "upstream:v0.5.75"
       com.9router.source.ref: "main"

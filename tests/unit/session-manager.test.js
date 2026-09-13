@@ -1,6 +1,6 @@
 // A2: locks resolveSessionId priority/stickiness (codex/kiro/antigravity centralization).
 import { describe, it, expect, beforeEach } from "vitest";
-import { resolveContinuationId, resolveSessionId, resolveSessionIdentity, deriveSessionId, clearSessionStore } from "../../open-sse/utils/sessionManager.js";
+import { resolveContinuationId, resolveSessionId, resolveSessionIdentity, deriveSessionId, clearSessionStore, hasReliableSessionIdentity, resolveOpenRouterSessionId, deriveOpenRouterSessionId } from "../../open-sse/utils/sessionManager.js";
 
 // Assistant text must reach ASSISTANT_MIN_LEN (80) to use assistant anchor; else first user message.
 const longAssistant = "x".repeat(80);
@@ -179,6 +179,29 @@ describe("resolveSessionId", () => {
     const a = resolveSessionId({ body: withAssistant, connectionId: "conn1", scope: "kiro" });
     const b = resolveSessionId({ body: withAssistant, connectionId: "conn1", scope: "kiro" });
     expect(a).not.toBe(b);
+  });
+});
+
+describe("OpenRouter sticky-session identity", () => {
+  it("accepts conversation identifiers but rejects request/account-only fallbacks", () => {
+    expect(hasReliableSessionIdentity({ headers: { "x-session-id": "conversation-1" }, body: {} })).toBe(true);
+    expect(hasReliableSessionIdentity({ body: { conversation_id: "conversation-2" } })).toBe(true);
+    expect(hasReliableSessionIdentity({ headers: { "x-client-request-id": "request-1" }, body: {} })).toBe(false);
+    expect(hasReliableSessionIdentity({ body: {}, headers: {} })).toBe(false);
+  });
+
+  it("resolves a stable OpenRouter identity without using connection-only fallback", () => {
+    expect(resolveOpenRouterSessionId({ connectionId: "account-1", body: {} })).toBeNull();
+    expect(resolveOpenRouterSessionId({ connectionId: "account-1", headers: { "x-session-id": "conversation-1" }, body: {} })).toBe("conversation-1");
+  });
+
+  it("derives bounded opaque keys without exposing the input", () => {
+    const got = deriveOpenRouterSessionId("claude:550e8400-e29b-41d4-a716-446655440000");
+    expect(got).toMatch(/^or:v1:[a-f0-9]{48}$/);
+    expect(got).not.toContain("550e8400");
+    expect(got).toBe(deriveOpenRouterSessionId("claude:550e8400-e29b-41d4-a716-446655440000"));
+    expect(got).not.toBe(deriveOpenRouterSessionId("claude:550e8400-e29b-41d4-a716-446655440001"));
+    expect(got.length).toBeLessThanOrEqual(256);
   });
 });
 

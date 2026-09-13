@@ -9,11 +9,15 @@
  */
 
 import crypto from "crypto";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { MEMORY_CONFIG } from "../config/runtimeConfig.js";
 
 // Runtime storage: Key = connectionId, Value = { sessionId, lastUsed }
 const runtimeSessionStore = new Map();
 const continuationStore = new Map();
+let openRouterSessionSecret;
 
 // Periodically evict entries that haven't been used within TTL
 const cleanupInterval = setInterval(() => {
@@ -151,6 +155,66 @@ function extractClientSessionId(headers, body, scope = "") {
         normalizeSessionId(body?.conversation_id) ||
         (scope === "kiro" ? null : normalizeSessionId(body?.metadata?.user_id));
     return fromBody || null;
+}
+
+// Only treat identifiers that represent a conversation as safe inputs for
+// provider sticky routing. Account/request identifiers are deliberately
+// excluded so unrelated conversations do not share one OpenRouter session.
+export function hasReliableSessionIdentity({ headers, body } = {}) {
+    if (extractClaudeCodeSession(body?.metadata?.user_id)) return true;
+    if (extractAntigravitySession(body)) return true;
+    for (const key of SESSION_HEADER_KEYS) {
+        if (headerValue(headers, key)) return true;
+    }
+    if (normalizeSessionId(body?.session_id) || normalizeSessionId(body?.conversation_id)) return true;
+    return accumulateAssistantText(body).length >= ASSISTANT_MIN_LEN;
+}
+
+// Resolve a conversation identity for OpenRouter without falling back to an
+// account-only connection id. The ordinary resolver intentionally retains its
+// broader provider compatibility; this narrower helper is for sticky routing.
+export function resolveOpenRouterSessionId({ headers, body, connectionId, workspaceId } = {}) {
+    if (!hasReliableSessionIdentity({ headers, body })) return null;
+    return resolveSessionId({ headers, body, connectionId, workspaceId, scope: "openrouter" }) || null;
+}
+
+// The value is an opaque routing hint, not an authentication token. Hashing
+// prevents raw client identifiers (including accidental PII) from reaching
+// the upstream request body or provider observability stream.
+export function deriveOpenRouterSessionId(sessionId) {
+    const normalized = normalizeSessionId(sessionId);
+    if (!normalized) return null;
+    const secret = getOpenRouterSessionSecret();
+    // Without a stable secret, only opaque high-entropy IDs (UUID-like
+    // values) may be hashed. Do not make low-entropy emails/user labels
+    // dictionary-testable through a public digest.
+    const opaquePart = normalized.replace(/^[a-z][a-z0-9-]*:/i, "");
+    if (!secret && !/^[a-f0-9-]{32,}$/i.test(opaquePart)) return null;
+    const digest = secret
+        ? crypto.createHmac("sha256", secret)
+            .update(`9router:openrouter:session:v1:${normalized}`)
+            .digest("hex")
+        : crypto.createHash("sha256")
+            .update(`9router:openrouter:session:v1:${normalized}`)
+            .digest("hex");
+    return `or:v1:${digest.slice(0, 48)}`;
+}
+
+function getOpenRouterSessionSecret() {
+    if (openRouterSessionSecret !== undefined) return openRouterSessionSecret;
+    const fromEnv = process.env.OPENROUTER_SESSION_SECRET || process.env.JWT_SECRET;
+    if (fromEnv) {
+        openRouterSessionSecret = fromEnv;
+        return openRouterSessionSecret;
+    }
+    const dataDir = process.env.DATA_DIR || path.join(os.homedir(), ".9router");
+    try {
+        const fromFile = fs.readFileSync(path.join(dataDir, "jwt-secret"), "utf8").trim();
+        openRouterSessionSecret = fromFile || null;
+    } catch {
+        openRouterSessionSecret = null;
+    }
+    return openRouterSessionSecret;
 }
 
 function requestMessages(body) {

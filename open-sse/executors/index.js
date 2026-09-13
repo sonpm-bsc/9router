@@ -23,6 +23,7 @@ import TraeExecutor from "./trae.js";
 import ZedExecutor from "./zed.js";
 import WindsurfExecutor from "./windsurf.js";
 import { DefaultExecutor } from "./default.js";
+import { OpenRouterExecutor } from "./openrouter.js";
 import { DevinCliExecutor } from "./devin-cli.js";
 
 const executors = {
@@ -56,6 +57,7 @@ const executors = {
   zed: new ZedExecutor(),
   windsurf: new WindsurfExecutor(),
   "devin-cli": new DevinCliExecutor(),
+  openrouter: new OpenRouterExecutor(),
 };
 
 const defaultCache = new Map();
@@ -97,3 +99,4 @@ export { default as TraeExecutor } from "./trae.js";
 export { default as ZedExecutor } from "./zed.js";
 export { default as WindsurfExecutor } from "./windsurf.js";
 export { DevinCliExecutor } from "./devin-cli.js";
+export { OpenRouterExecutor } from "./openrouter.js";

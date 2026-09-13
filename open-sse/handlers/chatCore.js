@@ -28,7 +28,7 @@ import { compressWithPxpipe } from "../rtk/pxpipe.js";
 import { getCapabilitiesForModel } from "../providers/capabilities.js";
 import { stripUnsupportedModalities } from "../translator/concerns/modality.js";
 import { prefetchRemoteImages } from "../translator/concerns/prefetch.js";
-import { resolveSessionId } from "../utils/sessionManager.js";
+import { resolveOpenRouterSessionId, resolveSessionId } from "../utils/sessionManager.js";
 
 /**
  * Core chat handler - shared between SSE and Worker
@@ -68,6 +68,17 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
       return connectionId || "";
     }
   })();
+  // Keep provider sticky-routing state request-local. Credentials may be
+  // shared by concurrent requests, so do not store this hint on the account
+  // object itself.
+  const openRouterSessionId = provider === "openrouter"
+    ? resolveOpenRouterSessionId({
+      headers: clientRawRequest?.headers,
+      body,
+      connectionId,
+      workspaceId: credentials?.providerSpecificData?.workspaceId,
+    })
+    : null;
   const reqTag = log?.tagForSession ? log.tagForSession(sessionSeed) : (log?.nextTag ? log.nextTag() : "");
 
   const sourceFormat = sourceFormatOverride || detectFormat(body);
@@ -340,11 +351,14 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
 
   // Execute request
   let providerResponse, providerUrl, providerHeaders, finalBody;
+  const executorCredentials = provider === "openrouter"
+    ? { ...credentials, _openrouterSessionId: openRouterSessionId }
+    : credentials;
   // Most executors return their registry format. Cursor AgentService is an
   // exception: it is decoded by the executor into OpenAI-compatible output.
   let providerResponseFormat = targetFormat;
   try {
-    const result = await executor.execute({ model, body: translatedBody, stream, credentials, signal: streamController.signal, log, proxyOptions });
+    const result = await executor.execute({ model, body: translatedBody, stream, credentials: executorCredentials, signal: streamController.signal, log, proxyOptions });
     providerResponse = result.response;
     providerUrl = result.url;
     providerHeaders = result.headers;
@@ -398,7 +412,10 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
           try { await onCredentialsRefreshed(newCredentials); } catch (e) { log?.warn?.("TOKEN", `onCredentialsRefreshed failed: ${e.message}`); }
         }
         try {
-          const retryResult = await executor.execute({ model, body: translatedBody, stream, credentials, signal: streamController.signal, log, proxyOptions });
+          const retryCredentials = provider === "openrouter"
+            ? { ...credentials, _openrouterSessionId: openRouterSessionId }
+            : credentials;
+          const retryResult = await executor.execute({ model, body: translatedBody, stream, credentials: retryCredentials, signal: streamController.signal, log, proxyOptions });
           if (retryResult.response.ok) {
             providerResponse = retryResult.response;
             providerUrl = retryResult.url;
