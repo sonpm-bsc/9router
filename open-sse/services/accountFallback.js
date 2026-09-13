@@ -25,6 +25,14 @@ export function checkFallbackError(status, errorText, backoffLevel = 0) {
     ? (typeof errorText === "string" ? errorText : JSON.stringify(errorText)).toLowerCase()
     : "";
 
+  // Input token overflow is deterministic for the request, not the account.
+  if (status === 400 && (
+    lowerError.includes("input token count exceeds") ||
+    lowerError.includes("maximum number of tokens allowed")
+  )) {
+    return { shouldFallback: false, cooldownMs: 0 };
+  }
+
   for (const rule of ERROR_RULES) {
     // Text-based rule: match substring in error message
     if (rule.text && lowerError && lowerError.includes(rule.text)) {

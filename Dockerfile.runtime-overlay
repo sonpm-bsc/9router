@@ -1,0 +1,12 @@
+# syntax=docker/dockerfile:1
+
+# r3 is the verified v0.5.75 runtime with the committed cache-telemetry overlay.
+ARG BASE_IMAGE=9router:cachefix-claude-usage-20260912-v075-r3
+FROM ${BASE_IMAGE}
+
+LABEL org.opencontainers.image.title="9router cache telemetry + overflow guard overlay" \
+      org.opencontainers.image.version="0.5.75" \
+      org.opencontainers.image.base.name="upstream:v0.5.75" \
+      com.9router.source.ref="main"
+
+COPY open-sse/services/accountFallback.js /app/open-sse/services/accountFallback.js
