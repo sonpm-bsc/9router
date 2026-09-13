@@ -11,6 +11,19 @@ services:
       com.9router.source.ref: "main"
     ports:
       - "3000:20128"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          fetch("http://127.0.0.1:20128/api/health").then((response) => {
+          if (!response.ok) process.exitCode = 1;
+          }).catch(() => { process.exitCode = 1; });
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     environment:
       SEARXNG_URL: http://host.docker.internal:8888/search
     volumes:
