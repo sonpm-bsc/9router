@@ -20,6 +20,8 @@ function messagePayload(body) {
   if (Array.isArray(body?.input)) return body.input;
   const kiro = collectKiroHeadroomMessages(body);
   if (kiro) return kiro.messages;
+  const antigravity = collectAntigravityHeadroomMessages(body);
+  if (antigravity) return antigravity.messages;
   return null;
 }
 
@@ -34,7 +36,7 @@ function captureSizeSnapshot(body) {
   return {
     bodyBytes: jsonBytes(body),
     messageBytes: messages ? jsonBytes(messages) : 0,
-    toolSchemaBytes: jsonBytes(body?.tools || []),
+    toolSchemaBytes: jsonBytes(body?.tools || body?.request?.tools || []),
     toolHistoryBytes: jsonBytes(toolHistory),
   };
 }
@@ -206,6 +208,128 @@ function applyKiroHeadroomMessages(projection, compressedMessages, diagnostics) 
   return true;
 }
 
+function collectAntigravityHeadroomMessages(body) {
+  const req = body?.request || body;
+  if (!req || typeof req !== "object") return null;
+  const contents = req.contents;
+  if (!Array.isArray(contents)) return null;
+
+  const messages = [];
+  const targets = [];
+
+  const addTarget = (role, text, target, extra = {}) => {
+    messages.push({ role, content: text, ...extra });
+    targets.push(target);
+  };
+
+  const sysInst = req.systemInstruction;
+  if (sysInst) {
+    if (typeof sysInst === "string") {
+      addTarget("system", sysInst, { object: req, key: "systemInstruction" });
+    } else if (Array.isArray(sysInst.parts)) {
+      for (const part of sysInst.parts) {
+        if (typeof part?.text === "string" && part.text) {
+          addTarget("system", part.text, { object: part, key: "text" });
+        }
+      }
+    }
+  }
+
+  for (const item of contents) {
+    if (!item || typeof item !== "object") continue;
+    const role = item.role === "model" ? "assistant" : "user";
+    const parts = Array.isArray(item.parts) ? item.parts : [];
+
+    let toolCalls;
+    if (role === "assistant") {
+      const calls = [];
+      for (const p of parts) {
+        if (p?.functionCall) {
+          calls.push({
+            id: p.functionCall.id || `call_${p.functionCall.name}`,
+            type: "function",
+            function: {
+              name: p.functionCall.name || "",
+              arguments: JSON.stringify(p.functionCall.args || {}),
+            },
+          });
+        }
+      }
+      if (calls.length > 0) toolCalls = calls;
+    }
+
+    let emittedAssistantWithTools = false;
+    for (const p of parts) {
+      if (!p || typeof p !== "object") continue;
+      if (p.thought === true) continue;
+
+      if (p.functionResponse) {
+        const fnResp = p.functionResponse;
+        const toolCallId = fnResp.id || fnResp.name || "tool";
+        let text = null;
+        let target = null;
+        if (typeof fnResp.response?.result === "string") {
+          text = fnResp.response.result;
+          target = { object: fnResp.response, key: "result" };
+        } else if (typeof fnResp.response === "string") {
+          text = fnResp.response;
+          target = { object: fnResp, key: "response" };
+        }
+        if (text !== null) {
+          addTarget("tool", text, target, { tool_call_id: toolCallId });
+        }
+        continue;
+      }
+
+      if (typeof p.text === "string") {
+        const extra = (role === "assistant" && toolCalls && !emittedAssistantWithTools)
+          ? { tool_calls: toolCalls }
+          : {};
+        if (extra.tool_calls) emittedAssistantWithTools = true;
+        addTarget(role, p.text, { object: p, key: "text" }, extra);
+      }
+    }
+
+    if (role === "assistant" && toolCalls && !emittedAssistantWithTools) {
+      addTarget("assistant", "", null, { tool_calls: toolCalls });
+    }
+  }
+
+  return (messages.length > 0 && targets.some((t) => t !== null)) ? { messages, targets } : null;
+}
+
+function applyAntigravityHeadroomMessages(projection, compressedMessages, diagnostics) {
+  if (!Array.isArray(compressedMessages) || compressedMessages.length !== projection.messages.length) {
+    setDiagnostic(diagnostics, "proxy response did not match Antigravity message count");
+    return false;
+  }
+
+  const updates = [];
+  for (let i = 0; i < projection.messages.length; i++) {
+    const expected = projection.messages[i];
+    const actual = compressedMessages[i];
+    if (!actual || actual.role !== expected.role) {
+      setDiagnostic(diagnostics, "proxy response did not preserve Antigravity message order");
+      return false;
+    }
+
+    const target = projection.targets[i];
+    if (target) {
+      const text = textFromHeadroomMessage(actual);
+      if (text === null) {
+        setDiagnostic(diagnostics, "proxy response missing Antigravity text content");
+        return false;
+      }
+      updates.push({ target, text });
+    }
+  }
+
+  for (const update of updates) {
+    update.target.object[update.target.key] = update.text;
+  }
+  return true;
+}
+
 // POST messages to Headroom /v1/compress; returns compressed messages + stats or null.
 async function callCompress(url, messages, model, timeoutMs, compressUserMessages, diagnostics) {
   const endpoint = buildCompressEndpoint(url);
@@ -308,6 +432,22 @@ export async function compressWithHeadroom(body, { enabled, url, model, format, 
       const data = await callCompress(url, projection.messages, model, timeoutMs, compressUserMessages, diagnostics || {});
       if (!data) return null;
       if (!applyKiroHeadroomMessages(projection, data.messages, diagnostics)) return null;
+      if (diagnostics) diagnostics.after = captureSizeSnapshot(body);
+      return data;
+    }
+
+    // Antigravity shape: request.contents/systemInstruction are projected to
+    // OpenAI messages for the proxy, then copied back into the original
+    // Antigravity fields. Keep provider envelope and tool signatures intact.
+    if (format === "antigravity") {
+      const projection = collectAntigravityHeadroomMessages(body);
+      if (!projection) {
+        setDiagnostic(diagnostics, "Antigravity request did not project to messages[]");
+        return null;
+      }
+      const data = await callCompress(url, projection.messages, model, timeoutMs, compressUserMessages, diagnostics || {});
+      if (!data) return null;
+      if (!applyAntigravityHeadroomMessages(projection, data.messages, diagnostics)) return null;
       if (diagnostics) diagnostics.after = captureSizeSnapshot(body);
       return data;
     }
