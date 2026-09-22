@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getProviderConnections } from "@/lib/localDb";
 import { backfillCodexEmails } from "@/lib/oauth/providers";
 import { USAGE_APIKEY_PROVIDERS, USAGE_SUPPORTED_PROVIDERS } from "@/shared/constants/providers";
+import { getModelsByProviderId } from "open-sse/config/providerModels.js";
 
 const SAFE_FIELDS = [
   "id", "provider", "authType", "name", "email", "displayName",
@@ -29,7 +30,42 @@ function maskName(name) {
   return name;
 }
 
-function sanitize(c) {
+const MODEL_LOCK_PREFIX = "modelLock_";
+
+// Surface active per-model rate-limit cooldowns (not raw secrets) so the usage
+// dashboard can show the real routing-lock state instead of only the
+// provider's own (sometimes non-live) quota-listing API.
+function activeModelLocks(c) {
+  const now = Date.now();
+  const locks = {};
+  for (const [key, value] of Object.entries(c)) {
+    if (!key.startsWith(MODEL_LOCK_PREFIX) || !value) continue;
+    const untilMs = new Date(value).getTime();
+    if (Number.isFinite(untilMs) && untilMs > now) {
+      locks[key.slice(MODEL_LOCK_PREFIX.length)] = value;
+    }
+  }
+  if (Object.keys(locks).length === 0) return null;
+  return expandModelLockAliases(c.provider, locks);
+}
+
+// The routing lock is keyed by the raw upstream model id (e.g. the single
+// upstream tier several friendly display models share), not by the friendly
+// model id shown in quota rows. Expand so a dashboard can look up a lock by
+// either key without needing its own copy of the provider's model registry.
+function expandModelLockAliases(provider, rawLocks) {
+  const models = getModelsByProviderId(provider);
+  if (!Array.isArray(models) || models.length === 0) return rawLocks;
+  const expanded = { ...rawLocks };
+  for (const m of models) {
+    if (m?.upstreamModelId && m?.id && rawLocks[m.upstreamModelId] !== undefined && expanded[m.id] === undefined) {
+      expanded[m.id] = rawLocks[m.upstreamModelId];
+    }
+  }
+  return expanded;
+}
+
+export function sanitize(c) {
   const safe = {};
   for (const f of SAFE_FIELDS) if (c[f] !== undefined) safe[f] = c[f];
   if (safe.name) safe.name = maskName(safe.name);
@@ -40,6 +76,8 @@ function sanitize(c) {
     }
     safe.providerSpecificData = psd;
   }
+  const locks = activeModelLocks(c);
+  if (locks) safe.activeModelLocks = locks;
   return safe;
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { formatResetTime, getRemainingPercentage } from "./utils";
+import { formatResetTime, getRemainingPercentage, getActiveLockUntil } from "./utils";
 
 const PAGE_SIZE = 10;
 
@@ -90,6 +90,7 @@ export default function QuotaTable({
   sortMode = "default",
   showSortLabel = false,
   onHideQuota = null,
+  activeModelLocks = null,
 }) {
   const [page, setPage] = useState(1);
 
@@ -158,6 +159,7 @@ export default function QuotaTable({
           // and their resetAt is a hard expiry, so word it as "expires".
           const recurring = quota.recurring !== false;
           const countdownLabel = recurring ? `in ${countdown}` : `expires in ${countdown}`;
+          const lockUntil = getActiveLockUntil(activeModelLocks, quota.modelKey);
 
           return (
             <div
@@ -165,11 +167,21 @@ export default function QuotaTable({
               className={`flex items-center gap-2 border-b border-black/5 dark:border-white/5 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors ${cellPad}`}
             >
               {/* Name */}
-              <div className="flex w-36 min-w-0 items-center gap-1.5">
-                <span className="text-[10px] shrink-0">{colors.emoji}</span>
-                <span className={`${nameText} font-medium text-text-primary truncate`}>
-                  {quota.name}
-                </span>
+              <div className="flex w-36 min-w-0 flex-col gap-0.5">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <span className="text-[10px] shrink-0">{colors.emoji}</span>
+                  <span className={`${nameText} font-medium text-text-primary truncate`}>
+                    {quota.name}
+                  </span>
+                </div>
+                {lockUntil && (
+                  <span
+                    className="inline-flex w-fit items-center gap-0.5 rounded-md bg-red-500/10 px-1 py-0.5 text-[9px] font-medium text-red-600 dark:text-red-400"
+                    title="Real rate-limit lock from the last 429 — the quota bar above may not reflect this."
+                  >
+                    🔒 429 in {formatResetTime(lockUntil)}
+                  </span>
+                )}
               </div>
 
               {/* Progress + used/total */}

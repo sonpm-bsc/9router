@@ -224,6 +224,20 @@ export function setQuotaCache(connectionId, quotaEntry) {
  * @param {string|Date} date - ISO date string or Date object
  * @returns {string} Formatted countdown (e.g., "2d 5h 30m", "4h 40m", "15m") or "-"
  */
+// The provider's own quota-listing API (used for the bars/percentages above)
+// can be entirely disconnected from the real per-request rate limit — Google's
+// Antigravity quota endpoint reports a static 100% regardless of actual usage.
+// This looks up the *real* routing-lock state (populated from live 429s) for a
+// quota row so the dashboard can show it wasn't fooled by a decorative number.
+export function getActiveLockUntil(activeModelLocks, modelKey) {
+  if (!activeModelLocks || !modelKey) return null;
+  const until = activeModelLocks[modelKey];
+  if (!until) return null;
+  const untilMs = new Date(until).getTime();
+  if (!Number.isFinite(untilMs) || untilMs <= Date.now()) return null;
+  return until;
+}
+
 export function formatResetTime(date) {
   if (!date) return "-";
 
