@@ -123,10 +123,18 @@ export class AntigravityExecutor extends BaseExecutor {
     if (response.status !== 429 || !bodyText) return base;
     try {
       const parsed = JSON.parse(bodyText);
-      if (parsed?.reason === "QUOTA_EXHAUSTED" && parsed?.quotaResetTimeStamp) {
-        const resetsAtMs = Date.parse(parsed.quotaResetTimeStamp);
-        if (Number.isFinite(resetsAtMs) && resetsAtMs > Date.now()) {
-          base.resetsAtMs = resetsAtMs;
+      const details = parsed?.error?.details;
+      if (Array.isArray(details)) {
+        for (const d of details) {
+          if (d?.["@type"] === "type.googleapis.com/google.rpc.ErrorInfo"
+            && d?.reason === "QUOTA_EXHAUSTED"
+            && d?.metadata?.quotaResetTimeStamp) {
+            const resetsAtMs = Date.parse(d.metadata.quotaResetTimeStamp);
+            if (Number.isFinite(resetsAtMs) && resetsAtMs > Date.now()) {
+              base.resetsAtMs = resetsAtMs;
+            }
+            break;
+          }
         }
       }
     } catch { /* fall through to base parsing */ }
