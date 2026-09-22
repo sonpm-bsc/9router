@@ -1,16 +1,26 @@
 # syntax=docker/dockerfile:1
 
-# r4 is the verified v0.5.75 runtime with cache telemetry and the overflow guard.
-ARG BASE_IMAGE=9router:cachefix-claude-usage-20260913-v075-r4
+# r5 is the verified v0.5.75 runtime with cache telemetry, overflow guard, and session routing.
+ARG BASE_IMAGE=9router:cachefix-openrouter-session-20260913-v075-r5
 FROM ${BASE_IMAGE}
+
+ARG SOURCE_REF=working-tree
 
 LABEL org.opencontainers.image.title="9router cache telemetry + OpenRouter session overlay" \
       org.opencontainers.image.version="0.5.75" \
       org.opencontainers.image.base.name="upstream:v0.5.75" \
-      com.9router.source.ref="main"
+      com.9router.source.ref="${SOURCE_REF}" \
+      com.9router.bundle.type="prebuilt-next"
+
+# The deployed process runs the prebuilt Next bundle, not these source files.
+# Supply the generated `.next` directory as the named `hostbundle` build
+# context. Copy only that directory so the v0.5.75 base package and dependency
+# set remain authoritative.
+COPY --from=hostbundle / /app/.next/
 
 COPY open-sse/services/accountFallback.js /app/open-sse/services/accountFallback.js
 COPY open-sse/executors/index.js /app/open-sse/executors/index.js
 COPY open-sse/executors/openrouter.js /app/open-sse/executors/openrouter.js
 COPY open-sse/handlers/chatCore.js /app/open-sse/handlers/chatCore.js
 COPY open-sse/utils/sessionManager.js /app/open-sse/utils/sessionManager.js
+COPY open-sse/rtk/headroom.js /app/open-sse/rtk/headroom.js

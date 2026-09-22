@@ -3,7 +3,7 @@
 # rebuild it from the documented upstream base before using on another host.
 services:
   9router:
-    image: 9router:cachefix-openrouter-session-20260913-v075-r5
+    image: 9router:cachefix-openrouter-session-20260913-v075-r6
     labels:
       org.opencontainers.image.title: "9router cache telemetry + OpenRouter session overlay"
       org.opencontainers.image.version: "0.5.75"

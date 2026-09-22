@@ -1,8 +1,9 @@
 # 9Router runtime provenance
 
-## Current local deployment
+## Current local runtime
 
-- Image: `9router:cachefix-openrouter-session-20260913-v075-r5`
+- Running image: `9router:cachefix-openrouter-session-20260913-v075-r5`
+- Compose target (not deployed): `9router:cachefix-openrouter-session-20260913-v075-r6`
 - Runtime package line: `0.5.75`
 - Build base: verified local r4 overlay from upstream tag `v0.5.75`
 - Data volume: `9router-data` mounted at `/app/data`
@@ -20,9 +21,23 @@ from the repository Dockerfile and silently downgrade the live runtime.
 2. Apply the deterministic input-overflow fallback guard and the committed
    OpenRouter executor/session-key files as thin runtime overlays.
 3. Run the focused usage tests and `node --check` before building.
-4. Build a new date/revision image tag and update `docker-compose.local.yml`.
-5. Preserve `9router-data`, keep the previous image/container as rollback, and
+4. Build a new date/revision image tag with the generated Next bundle supplied
+   as the named `hostbundle` context. The context should exclude
+   `.next/standalone`, `.next/cache`, and `.next/types`; the image keeps the
+   v0.5.75 base package and dependencies and replaces only `/app/.next`.
+5. Update `docker-compose.local.yml` only as part of an explicitly approved
+   runtime rollout.
+6. Preserve `9router-data`, keep the previous image/container as rollback, and
    verify `/api/health` plus `npm run cache:canary` after restart.
+
+Example local build (use a filtered generated-bundle context):
+
+```sh
+docker build --file Dockerfile.runtime-overlay \
+  --build-arg SOURCE_REF=main-<commit-or-working-tree> \
+  --build-context hostbundle=/path/to/filtered-next-context \
+  --tag 9router:cachefix-openrouter-session-<date>-v075-rN .
+```
 
 ## Rollback
 
