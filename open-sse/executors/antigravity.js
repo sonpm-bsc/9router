@@ -114,6 +114,25 @@ export class AntigravityExecutor extends BaseExecutor {
     super("antigravity", PROVIDERS.antigravity);
   }
 
+  // Individual-account quota exhaustion (reason: QUOTA_EXHAUSTED) resets days later,
+  // not the few minutes the generic backoff assumes — extract Google's own
+  // quotaResetTimeStamp so markAccountUnavailable() locks the account for the real duration
+  // instead of clearing the lock after ~5min while the account is still exhausted upstream.
+  parseError(response, bodyText) {
+    const base = super.parseError(response, bodyText);
+    if (response.status !== 429 || !bodyText) return base;
+    try {
+      const parsed = JSON.parse(bodyText);
+      if (parsed?.reason === "QUOTA_EXHAUSTED" && parsed?.quotaResetTimeStamp) {
+        const resetsAtMs = Date.parse(parsed.quotaResetTimeStamp);
+        if (Number.isFinite(resetsAtMs) && resetsAtMs > Date.now()) {
+          base.resetsAtMs = resetsAtMs;
+        }
+      }
+    } catch { /* fall through to base parsing */ }
+    return base;
+  }
+
   buildUrl(model, stream, urlIndex = 0) {
     const baseUrls = this.getBaseUrls();
     const baseUrl = baseUrls[urlIndex] || baseUrls[0];
