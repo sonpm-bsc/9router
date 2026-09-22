@@ -195,6 +195,11 @@ describe("OpenRouter sticky-session identity", () => {
     expect(resolveOpenRouterSessionId({ connectionId: "account-1", headers: { "x-session-id": "conversation-1" }, body: {} })).toBe("conversation-1");
   });
 
+  it("reads OpenRouter identity from WHATWG Headers and raw-header arrays", () => {
+    expect(resolveOpenRouterSessionId({ headers: new Headers({ "X-Session-ID": "conversation-headers" }), body: {} })).toBe("conversation-headers");
+    expect(resolveOpenRouterSessionId({ headers: { "X-Session-ID": ["conversation-array"] }, body: {} })).toBe("conversation-array");
+  });
+
   it("derives bounded opaque keys without exposing the input", () => {
     const got = deriveOpenRouterSessionId("claude:550e8400-e29b-41d4-a716-446655440000");
     expect(got).toMatch(/^or:v1:[a-f0-9]{48}$/);

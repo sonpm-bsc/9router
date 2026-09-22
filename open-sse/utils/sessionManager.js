@@ -125,7 +125,13 @@ function extractClaudeCodeSession(userId) {
 // Lowercase-key lookup for raw client headers
 function headerValue(headers, key) {
     if (!headers || typeof headers !== "object") return null;
-    return normalizeSessionId(headers[key] ?? headers[key.toLowerCase()]);
+    let value = headers[key] ?? headers[key.toLowerCase()];
+    if (value == null && typeof headers.get === "function") value = headers.get(key);
+    if (value == null) {
+        const entry = Object.entries(headers).find(([name]) => name.toLowerCase() === key.toLowerCase());
+        value = entry?.[1];
+    }
+    return normalizeSessionId(Array.isArray(value) ? value[0] : value);
 }
 
 // Read client-provided session id from headers/body (no generation)
