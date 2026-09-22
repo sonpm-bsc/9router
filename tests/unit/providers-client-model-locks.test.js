@@ -48,17 +48,17 @@ describe("providers/client sanitize: real cooldown lock surfacing", () => {
   });
 
   it("expands a raw upstream lock to every antigravity friendly model id that shares it", () => {
+    // gemini-3.8-flash and gemini-3.8-flash-medium both resolve to the same
+    // upstreamModelId ("gemini-3.8-flash-medium(medium)") in the registry.
     const until = futureIso(30 * 60 * 1000);
-    const conn = { id: "c1", provider: "antigravity", [`modelLock_gemini-3.8-flash-tiered`]: until };
+    const conn = { id: "c1", provider: "antigravity", [`modelLock_gemini-3.8-flash-medium(medium)`]: until };
 
     const safe = sanitize(conn);
 
     expect(safe.activeModelLocks).toEqual({
-      "gemini-3.8-flash-tiered": until,
-      "gemini-3.8-flash": until,
-      "gemini-3.8-flash-high": until,
+      "gemini-3.8-flash-medium(medium)": until,
       "gemini-3.8-flash-medium": until,
-      "gemini-3.8-flash-low": until,
+      "gemini-3.8-flash": until,
     });
   });
 

@@ -17,10 +17,10 @@ describe("checkFallbackError", () => {
     });
   });
 
-  it("keeps other 400 errors on the default fallback path", () => {
+  it("does not cool down the account for other request-scoped 400 errors", () => {
     expect(checkFallbackError(400, "Malformed request body")).toEqual({
-      shouldFallback: true,
-      cooldownMs: TRANSIENT_COOLDOWN_MS,
+      shouldFallback: false,
+      cooldownMs: 0,
     });
   });
 
@@ -39,8 +39,15 @@ describe("checkFallbackError", () => {
     });
   });
 
-  it("preserves the default fallback for unmatched errors", () => {
+  it("does not cool down the account for an unmatched request-scoped 4xx", () => {
     expect(checkFallbackError(418, "upstream error")).toEqual({
+      shouldFallback: false,
+      cooldownMs: 0,
+    });
+  });
+
+  it("still applies the default transient fallback for unmatched non-4xx errors", () => {
+    expect(checkFallbackError(500, "upstream error")).toEqual({
       shouldFallback: true,
       cooldownMs: TRANSIENT_COOLDOWN_MS,
     });
