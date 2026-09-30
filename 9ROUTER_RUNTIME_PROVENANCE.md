@@ -2,12 +2,13 @@
 
 ## Current local runtime
 
-- Running image: `9router:cachefix-openrouter-session-20260913-v075-r5`
-- Compose target (not deployed): `9router:cachefix-openrouter-session-20260913-v075-r6`
-- Runtime package line: `0.5.75`
-- Build base: verified local r4 overlay from upstream tag `v0.5.75`
+- Running image: `9router:upstream-merge-v0.5.81` (live since 2026-09-22, pinned in `docker-compose.local.yml`)
+- Rollback images: `9router:cachefix-openrouter-session-20260922-v075-r11`, then `...20260913-v075-r6`
+- Published ports: `3000:20128` (all clients use `http://127.0.0.1:3000`) and `20128:20128`
 - Data volume: `9router-data` mounted at `/app/data`
-- Compose source: `docker-compose.local.yml`
+- Compose source: `docker-compose.yml` + `docker-compose.local.yml`. `docker-compose.override.yml` is a
+  relative symlink to the local file, so a plain `docker compose up -d` loads both. The base file alone
+  starts upstream `decolua/9router:latest` on 20128 only and takes :3000 down (incident 2026-09-30, BSC-185).
 
 This is a local overlay image, not a registry release. The repository `main`
 lineage is older (`0.5.55`) than the deployed upstream base; do not rebuild
