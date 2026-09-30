@@ -10,6 +10,11 @@
   relative symlink to the local file, so a plain `docker compose up -d` loads both. The base file alone
   starts upstream `decolua/9router:latest` on 20128 only and takes :3000 down (incident 2026-09-30, BSC-185).
 
+Headroom token saver is deliberately OFF (AGY-586: breaks prefix caching and the BAML parser). The
+sidecar is gone and `headroomEnabled` is `false` in the gateway settings (stored in the `9router-data`
+volume, not in git). The upstream README/DOCKER.md sections about it describe an optional upstream
+feature and are intentionally left untouched to avoid merge conflicts.
+
 This is a local overlay image, not a registry release. The repository `main`
 lineage is older (`0.5.55`) than the deployed upstream base; do not rebuild
 from the repository Dockerfile and silently downgrade the live runtime.

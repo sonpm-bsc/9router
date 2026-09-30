@@ -6,8 +6,8 @@ services:
     image: 9router:upstream-merge-v0.5.81
     labels:
       org.opencontainers.image.title: "9router cache telemetry + OpenRouter session overlay"
-      org.opencontainers.image.version: "0.5.75"
-      org.opencontainers.image.base.name: "upstream:v0.5.75"
+      org.opencontainers.image.version: "0.5.81"
+      org.opencontainers.image.base.name: "upstream:v0.5.81"
       com.9router.source.ref: "main"
     ports:
       - "3000:20128"
