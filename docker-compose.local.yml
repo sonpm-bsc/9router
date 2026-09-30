@@ -1,9 +1,9 @@
 # Local Mac runtime override.
-# Uses the deployed v0.5.75 cache-telemetry overlay. This image is local-only;
+# Live since 2026-09-22: upstream-merge-v0.5.81 (r11 = rollback, r6 = base). ALWAYS pass both -f files. This image is local-only;
 # rebuild it from the documented upstream base before using on another host.
 services:
   9router:
-    image: 9router:cachefix-openrouter-session-20260913-v075-r6
+    image: 9router:upstream-merge-v0.5.81
     labels:
       org.opencontainers.image.title: "9router cache telemetry + OpenRouter session overlay"
       org.opencontainers.image.version: "0.5.75"
