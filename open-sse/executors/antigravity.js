@@ -115,31 +115,39 @@ export class AntigravityExecutor extends BaseExecutor {
     super("antigravity", PROVIDERS.antigravity);
   }
 
-  // Individual-account quota exhaustion (reason: QUOTA_EXHAUSTED) resets days later,
-  // not the few minutes the generic backoff assumes — extract Google's own
-  // quotaResetTimeStamp so markAccountUnavailable() locks the account for the real duration
-  // instead of clearing the lock after ~5min while the account is still exhausted upstream.
+  // Parse Antigravity quota error to extract precise resetsAtMs from ErrorInfo/RetryInfo
   parseError(response, bodyText) {
-    const base = super.parseError(response, bodyText);
-    if (response.status !== 429 || !bodyText) return base;
-    try {
-      const parsed = JSON.parse(bodyText);
-      const details = parsed?.error?.details;
-      if (Array.isArray(details)) {
+    if ((response.status === 429 || response.status === 409) && bodyText) {
+      try {
+        const json = JSON.parse(bodyText);
+        const err = json?.error;
+        let resetsAtMs = null;
+        const details = Array.isArray(err?.details) ? err.details : [];
         for (const d of details) {
-          if (d?.["@type"] === "type.googleapis.com/google.rpc.ErrorInfo"
-            && d?.reason === "QUOTA_EXHAUSTED"
-            && d?.metadata?.quotaResetTimeStamp) {
-            const resetsAtMs = Date.parse(d.metadata.quotaResetTimeStamp);
-            if (Number.isFinite(resetsAtMs) && resetsAtMs > Date.now()) {
-              base.resetsAtMs = resetsAtMs;
+          if (d?.metadata?.quotaResetTimeStamp) {
+            const ms = new Date(d.metadata.quotaResetTimeStamp).getTime();
+            if (!isNaN(ms) && ms > Date.now()) {
+              resetsAtMs = ms;
+              break;
             }
-            break;
+          }
+          if (typeof d?.retryDelay === "string") {
+            const sec = parseFloat(d.retryDelay);
+            if (!isNaN(sec) && sec > 0) {
+              const ms = Date.now() + Math.round(sec * 1000);
+              if (ms > Date.now()) {
+                resetsAtMs = ms;
+                break;
+              }
+            }
           }
         }
-      }
-    } catch { /* fall through to base parsing */ }
-    return base;
+        if (resetsAtMs) {
+          return { status: response.status, message: err?.message || bodyText, resetsAtMs };
+        }
+      } catch { /* fall through to default */ }
+    }
+    return super.parseError(response, bodyText);
   }
 
   buildUrl(model, stream, urlIndex = 0) {
@@ -259,7 +267,7 @@ export class AntigravityExecutor extends BaseExecutor {
         parts: modifiedParts || parts || [],
       };
     });
-    const contents = normalizeGeminiContents(rawContents);
+    const contents = normalizeGeminiContents(rawContents, model);
 
     // Sanitize tool schemas and function names before sending to Antigravity.
     let tools = body.request?.tools;
@@ -320,12 +328,19 @@ export class AntigravityExecutor extends BaseExecutor {
 
     this._lastSessionId = transformedRequest.sessionId; // cached for buildHeaders (base.execute order)
 
+    // Official Antigravity client omits `requestType` entirely on the agent
+    // (chat) path. Sending `requestType: "agent"` here (or leaking it through
+    // from an upstream envelope via the ...body spread below) makes Google
+    // bucket the request and return a detail-free 429 RESOURCE_EXHAUSTED even
+    // with quota available. `image_gen` and
+    // `search` buckets are unaffected and keep their own requestType.
+    delete body.requestType;
+
     return {
       ...body,
       project: projectId,
       model: body.model || model,
       userAgent: "antigravity",
-      requestType: "agent",
       requestId: buildIdeRequestId({ body, request: transformedRequest, credentials, model, requestType: "agent" }),
       request: transformedRequest
     };
