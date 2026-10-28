@@ -2,8 +2,8 @@
 
 ## Current local runtime
 
-- Running image: `9router:upstream-merge-v0.5.104` (live since 2026-10-20, pinned in `docker-compose.local.yml`)
-- Rollback images: `9router:upstream-merge-v0.5.81`, `9router:cachefix-openrouter-session-20260922-v075-r11`, then `...20260913-v075-r6`
+- Running image: `9router:upstream-merge-v0.5.111` (live since 2026-10-28, pinned in `docker-compose.local.yml`)
+- Rollback images: `9router:upstream-merge-v0.5.104`, `9router:upstream-merge-v0.5.81`, `9router:cachefix-openrouter-session-20260922-v075-r11`, then `...20260913-v075-r6`
 - Published ports: `3000:20128` (all clients use `http://127.0.0.1:3000`) and `20128:20128`
 - Data volume: `9router-data` mounted at `/app/data`
 - Compose source: `docker-compose.yml` + `docker-compose.local.yml`. `docker-compose.override.yml` is a

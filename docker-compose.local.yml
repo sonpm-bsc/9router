@@ -1,13 +1,13 @@
 # Local Mac runtime override.
-# Live since 2026-10-20: upstream-merge-v0.5.104 (upstream-merge-v0.5.81 = rollback). ALWAYS pass both -f files. This image is local-only;
+# Live since 2026-10-28: upstream-merge-v0.5.111 (upstream-merge-v0.5.104 = rollback). ALWAYS pass both -f files. This image is local-only;
 # rebuild it from the documented upstream base before using on another host.
 services:
   9router:
-    image: 9router:upstream-merge-v0.5.104
+    image: 9router:upstream-merge-v0.5.111
     labels:
       org.opencontainers.image.title: "9router cache telemetry + OpenRouter session overlay"
-      org.opencontainers.image.version: "0.5.104"
-      org.opencontainers.image.base.name: "upstream:v0.5.104"
+      org.opencontainers.image.version: "0.5.111"
+      org.opencontainers.image.base.name: "upstream:v0.5.111"
       com.9router.source.ref: "main"
     ports:
       - "3000:20128"
