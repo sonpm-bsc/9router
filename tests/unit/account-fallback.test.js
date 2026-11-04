@@ -21,6 +21,7 @@ describe("checkFallbackError", () => {
     expect(checkFallbackError(400, "Malformed request body")).toEqual({
       shouldFallback: false,
       cooldownMs: 0,
+      requestScoped: true,
     });
   });
 
@@ -43,6 +44,7 @@ describe("checkFallbackError", () => {
     expect(checkFallbackError(418, "upstream error")).toEqual({
       shouldFallback: false,
       cooldownMs: 0,
+      requestScoped: true,
     });
   });
 
