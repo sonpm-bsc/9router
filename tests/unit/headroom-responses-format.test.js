@@ -48,7 +48,7 @@ describe("compressWithHeadroom openai-responses format (#1998)", () => {
     expect(typeof body.input[0].content).not.toBe("string");
   });
 
-  it("skips Responses tool/reasoning history instead of collapsing it into a message (#2132)", async () => {
+  it("only projects plain tool output and leaves tool/reasoning history untouched (#2132)", async () => {
     global.fetch = vi.fn(async () => ({
       ok: true,
       json: async () => ({
@@ -99,9 +99,20 @@ describe("compressWithHeadroom openai-responses format (#1998)", () => {
       diagnostics,
     });
 
+    // Only the plain-string function_call_output is projected to the proxy.
+    // The proxy here answers with a role "user" message, which applyToolOutputText
+    // rejects, so the body stays untouched (fail-open).
     expect(data).toBeNull();
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    const sent = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(sent.messages).toHaveLength(1);
+    expect(sent.messages[0]).toMatchObject({ role: "tool", content: "ok" });
+    const sentText = JSON.stringify(sent);
+    expect(sentText).not.toContain("apply_patch");
+    expect(sentText).not.toContain("Begin Patch");
+    expect(sentText).not.toContain("Need a plan");
+    expect(sentText).not.toContain("investigate bug");
     expect(body.input).toEqual(input);
-    expect(diagnostics.reason).toBe("skipped: openai-responses tool/reasoning input is not safe to compress");
+    expect(diagnostics.reason).toBe("proxy response did not preserve tool-output IDs, order, roles or text");
   });
 });
