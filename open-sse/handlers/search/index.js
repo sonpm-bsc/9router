@@ -36,6 +36,35 @@ function sanitizeHeaders(headers) {
   return out;
 }
 
+/**
+ * Plain fetch for the operator-configured SearXNG origin only. That origin is
+ * allowed to resolve to a private IP (e.g. host.docker.internal), which the
+ * SSRF guard would reject, so it skips fetchPublic. Redirects are refused: a
+ * trusted origin must never be able to bounce the request somewhere else.
+ */
+function fetchOperatorConfigured(url, init) {
+  return fetch(url, { ...init, redirect: "error" });
+}
+
+/**
+ * Pick the fetch implementation. Only SearXNG, and only when the request URL
+ * has exactly the origin of the operator-configured baseUrl, is trusted.
+ * Anything else (client-supplied provider_options.baseUrl, other providers,
+ * unparseable URLs, URLs with credentials) goes through fetchPublic.
+ */
+function pickSearchFetch(provider, providerConfig, url, log) {
+  if (provider.id !== "searxng") return fetchPublic;
+  try {
+    const target = new URL(url);
+    const configured = new URL(providerConfig.baseUrl);
+    if (target.username || target.password || configured.username || configured.password) return fetchPublic;
+    if (target.origin !== "null" && target.origin === configured.origin) return fetchOperatorConfigured;
+  } catch (err) {
+    log?.error?.("SEARCH", `${provider.id} cannot compare request origin, using SSRF-guarded fetch: ${err.message}`);
+  }
+  return fetchPublic;
+}
+
 /** Build a JSON Response wrapper used by the auth layer. */
 function jsonResponse(payload, status = 200) {
   return new Response(JSON.stringify(payload), {
@@ -123,7 +152,7 @@ async function tryDedicatedProvider({ provider, providerConfig, body, credential
   log?.info?.("SEARCH", `${provider.id} | "${params.query.slice(0, 80)}" | type=${params.searchType}`);
 
   try {
-    const resp = await fetchPublic(url, { ...init, headers: sanitizeHeaders(init.headers), signal: controller.signal });
+    const resp = await pickSearchFetch(provider, providerConfig, url, log)(url, { ...init, headers: sanitizeHeaders(init.headers), signal: controller.signal });
     clearTimeout(timer);
     if (!resp.ok) {
       const errText = await resp.text().catch(() => "");
